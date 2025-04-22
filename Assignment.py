@@ -64,8 +64,11 @@ def evaluate_recommendations(base_game, recommendations, df):
         return 0, 0
 
 # Function to recommend games based on cosine similarity
-def content_based_recommendations(game_name, num_recommendations=5, df=df_content):  # NEW: added df parameter
+def content_based_recommendations(game_name, num_recommendations=5, df=None):  # Changed parameter
+    """Recommend games based on content similarity"""
     try:
+        if df is None:  # NEW: Handle default case
+            df = df_content
         if game_name not in df['Title'].values:  # NEW: validation
             raise ValueError("Game not found in database")
             
