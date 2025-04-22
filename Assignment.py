@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics import precision_score, recall_score  # NEW
 
 # Set page config
 st.set_page_config(
@@ -10,6 +11,15 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+"""
+GAME RECOMMENDATION SYSTEM - CONTENT-BASED FILTERING  # NEW
+Algorithm:
+1. Combines Genres, Platforms, Publisher into 'content' feature
+2. TF-IDF transforms text features into numerical vectors
+3. Cosine similarity between game vectors
+4. Returns top-N most similar games with quality metrics
+"""  # NEW
 
 pages = {
     "Home": "🏠",
@@ -23,10 +33,63 @@ pages = {
 @st.cache_data
 def load_content_data():
     df = pd.read_csv('all_video_games(cleaned).csv')
-    df = df.dropna(subset=['Genres', 'Platforms', 'Publisher', 'User Score'])  # Drop rows with essential missing values
-    df['User Score'] = df['User Score'].astype(float)  # Ensure correct data type for user score
+    df = df.dropna(subset=['Genres', 'Platforms', 'Publisher', 'User Score'])
+    df['User Score'] = df['User Score'].astype(float)
     df['content'] = df['Genres'] + ' ' + df['Platforms'] + ' ' + df['Publisher']
     return df
+
+# NEW: Evaluation function
+def evaluate_recommendations(base_game, recommendations, df):
+    """Calculate precision/recall for recommendations"""
+    try:
+        base_genres = set(df[df['Title'] == base_game]['Genres'].iloc[0].split(','))
+        base_platforms = set(df[df['Title'] == base_game]['Platforms'].iloc[0].split(','))
+        
+        true_positives = []
+        for idx, row in df.iterrows():
+            game_genres = set(row['Genres'].split(','))
+            game_platforms = set(row['Platforms'].split(','))
+            if len(base_genres & game_genres) > 0 and len(base_platforms & game_platforms) > 0:
+                true_positives.append(row['Title'])
+        
+        all_games = df['Title'].unique()
+        y_true = [1 if game in true_positives else 0 for game in all_games]
+        y_pred = [1 if game in recommendations['Title'].values else 0 for game in all_games]
+        
+        precision = precision_score(y_true, y_pred, zero_division=0)
+        recall = recall_score(y_true, y_pred, zero_division=0)
+        return precision, recall
+    except Exception as e:
+        st.error(f"Evaluation error: {str(e)}")
+        return 0, 0
+
+# Function to recommend games based on cosine similarity
+def content_based_recommendations(game_name, num_recommendations=5, df=df_content):  # NEW: added df parameter
+    try:
+        if game_name not in df['Title'].values:  # NEW: validation
+            raise ValueError("Game not found in database")
+            
+        if num_recommendations < 1 or num_recommendations > 20:  # NEW: validation
+            raise ValueError("Number of recommendations must be 1-20")
+
+        vectorizer = TfidfVectorizer(stop_words='english')
+        content_matrix = vectorizer.fit_transform(df['content'])
+
+        cosine_sim = cosine_similarity(content_matrix, content_matrix)
+        idx = df[df['Title'].str.lower() == game_name.lower()].index[0]
+        sim_scores = list(enumerate(cosine_sim[idx]))
+        sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+        sim_indices = [i[0] for i in sim_scores[1:num_recommendations+1]]
+        recommendations = df.iloc[sim_indices][['Title', 'Genres', 'User Score', 'Platforms', 'Release Date']]
+        
+        return recommendations
+    
+    except ValueError as e:  # NEW: specific error handling
+        st.error(str(e))
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Recommendation error: {str(e)}")
+        return pd.DataFrame()
 
 # Load the data for correlation finder
 @st.cache_data
@@ -40,28 +103,6 @@ def load_correlation_data():
 
 df_content = load_content_data()
 df_corr = load_correlation_data()
-
-# Function to recommend games based on cosine similarity
-def content_based_recommendations(game_name, num_recommendations=5):
-    vectorizer = TfidfVectorizer(stop_words='english')
-    content_matrix = vectorizer.fit_transform(df_content['content'])
-
-    try:
-        cosine_sim = cosine_similarity(content_matrix, content_matrix)
-        idx = df_content[df_content['Title'].str.lower() == game_name.lower()].index[0]
-        sim_scores = list(enumerate(cosine_sim[idx]))
-        sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-        sim_indices = [i[0] for i in sim_scores[1:num_recommendations+1]]
-        return df_content.iloc[sim_indices][['Title', 'Genres', 'User Score', 'Platforms', 'Release Date']]
-    except IndexError:
-        return pd.DataFrame(columns=['Title', 'Genres', 'User Score'])
-
-# Function to recommend games based on file upload and filters
-def recommend_games(df, preferences):
-    genre_filter = df['Genres'].str.contains(preferences['Genres'], case=False, na=False)
-    score_filter = df['User Score'] >= preferences['Minimum User Score']
-    filtered_df = df[genre_filter & score_filter]
-    return filtered_df
 
 # Create a custom sidebar menu
 st.sidebar.title("Navigation")
@@ -142,36 +183,71 @@ if page == "Home":
 
 # Page 1: Content-Based Recommendations
 elif page == "Content-Based Recommendations":
-    st.markdown("<h1 style='text-align: center; color: #4CAF50;'>🎮 Game Recommendation System</h1>", unsafe_allow_html=True)
-    st.markdown("<h2>Find Games Similar to Your Favorite</h2>", unsafe_allow_html=True)
-    st.write("This app helps you find games similar to the ones you like. Enter the game title below to get recommendations.")
-
-    # Add a selectbox for game selection
+    st.markdown("<h1 style='text-align: center; color: #4CAF50;'>🎮 Content-Based Game Recommendations</h1>", unsafe_allow_html=True)  # NEW: updated title
+    
+    with st.expander("How this works"):  # NEW: explanation
+        st.markdown("""
+        This system recommends games based on:
+        - 🎭 Genres
+        - 🖥️ Platforms
+        - 🏢 Publisher
+        using TF-IDF and cosine similarity algorithms.
+        """)
+    
     game_list = df_content['Title'].unique()
-    game_input = st.selectbox("Choose a game from the list:", game_list)
+    game_input = st.selectbox("Choose a game from the list:", game_list, 
+                            help="Select a game to find similar titles")  # NEW: help text
+    
+    num_recommendations = st.slider('Number of recommendations', 1, 10, 5,
+                                  help="Choose how many recommendations to display")  # NEW: help text
 
-    # Filters within the main page
-    st.subheader("Filters")
-    num_recommendations = st.slider('Number of recommendations', min_value=1, max_value=10, value=5)
-
-    # Game information display
     if game_input:
-        game_info = df_content[df_content['Title'] == game_input].iloc[0]
-        st.markdown(f"### Selected Game: {game_info['Title']}")
-        st.write(f"Genres: {game_info['Genres']}")
-        st.write(f"Platforms: {game_info['Platforms']}")
-        st.write(f"Publisher: {game_info['Publisher']}")
-        st.write(f"User Score: {game_info['User Score']}")
-        st.write(f"Release Date: {game_info['Release Date']}")
+        with st.container(border=True):  # NEW: better game info display
+            st.markdown(f"### 🕹️ Selected Game: {game_input}")
+            game_info = df_content[df_content['Title'] == game_input].iloc[0]
+            cols = st.columns(4)
+            cols[0].write(f"**Genres**: {game_info['Genres']}")
+            cols[1].write(f"**Platforms**: {game_info['Platforms']}")
+            cols[2].write(f"**Publisher**: {game_info['Publisher']}")
+            cols[3].write(f"**User Score**: ⭐ {game_info['User Score']}/10")
 
-    # Button to get recommendations
-    if st.button('Get Recommendations'):
-        recommendations = content_based_recommendations(game_input, num_recommendations)
-        if not recommendations.empty:
-            st.markdown(f"### Games similar to {game_input}:")
-            st.table(recommendations)
-        else:
-            st.write("No matching game found. Please try another.")
+    if st.button('Get Recommendations', type="primary"):  # NEW: primary button
+        with st.spinner('Finding similar games...'):  # NEW: loading indicator
+            recommendations = content_based_recommendations(game_input, num_recommendations)
+            
+            if not recommendations.empty:
+                st.success(f"Found {len(recommendations)} similar games!")  # NEW: success message
+                
+                # NEW: Evaluation metrics display
+                precision, recall = evaluate_recommendations(game_input, recommendations, df_content)
+                st.metric(label="Recommendation Quality", 
+                         value=f"Precision: {precision:.1%} | Recall: {recall:.1%}",
+                         help="Higher values mean better recommendations")
+                
+                # NEW: Card-based display
+                st.subheader("🎯 Recommended Games")
+                cols = st.columns(3)
+                for idx, row in recommendations.iterrows():
+                    with cols[idx % 3]:
+                        with st.container(border=True):
+                            st.markdown(f"**{row['Title']}**")
+                            st.write(f"⭐ {row['User Score']}/10")
+                            st.caption(f"**Genres**: {row['Genres']}")
+                            st.caption(f"**Platforms**: {row['Platforms']}")
+                            st.caption(f"Released: {row['Release Date']}")
+                
+                # NEW: Debug info for presentation
+                if st.checkbox("Show technical details"):
+                    st.write("Similarity calculation details:")
+                    st.code("""
+                    # Algorithm Steps:
+                    1. Combine features (Genres + Platforms + Publisher)
+                    2. Convert to TF-IDF vectors
+                    3. Compute cosine similarity matrix
+                    4. Return most similar games
+                    """)
+            else:
+                st.warning("No recommendations found. Try a different game.")
 
 # Page 2: File Upload and Filters
 elif page == "Top 10 Recommendation based on User Preferences":
