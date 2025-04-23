@@ -3,107 +3,13 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Set page config with custom theme
+# Set page config
 st.set_page_config(
     page_title="Game Recommendation System",
     page_icon=":video_game:",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# Custom CSS styling
-st.markdown("""
-<style>
-    /* Main content styling */
-    .main {
-        background-color: #f5f7fa;
-    }
-    
-    /* Title styling */
-    .title-text {
-        color: #2c3e50;
-        font-family: 'Poppins', sans-serif;
-        text-align: center;
-        margin-bottom: 30px;
-    }
-    
-    /* Card styling for sections */
-    .custom-card {
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        padding: 25px;
-        margin-bottom: 25px;
-        border-left: 5px solid #3498db;
-    }
-    
-    /* Section header styling */
-    .section-header {
-        color: #3498db;
-        font-family: 'Poppins', sans-serif;
-        border-bottom: 2px solid #3498db;
-        padding-bottom: 8px;
-        margin-bottom: 15px;
-    }
-    
-    /* Button styling */
-    .stButton>button {
-        background-color: #3498db;
-        color: white;
-        border-radius: 8px;
-        border: none;
-        padding: 10px 24px;
-        font-weight: 600;
-        transition: all 0.3s;
-    }
-    
-    .stButton>button:hover {
-        background-color: #2980b9;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    }
-    
-    /* Sidebar styling */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #2c3e50, #34495e);
-    }
-    
-    .sidebar .sidebar-content {
-        color: white;
-    }
-    
-    /* Custom section colors */
-    .content-card {
-        border-left-color: #3498db;
-        background: linear-gradient(to right, #f8f9fa, #e3f2fd);
-    }
-    
-    .knowledge-card {
-        border-left-color: #2ecc71;
-        background: linear-gradient(to right, #f8f9fa, #e8f5e9);
-    }
-    
-    .correlation-card {
-        border-left-color: #e74c3c;
-        background: linear-gradient(to right, #f8f9fa, #ffebee);
-    }
-    
-    /* Table styling */
-    .dataframe {
-        border-radius: 8px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-    }
-    
-    /* Footer styling */
-    .footer {
-        text-align: center;
-        margin-top: 50px;
-        padding: 20px;
-        color: #7f8c8d;
-        border-top: 1px solid #ecf0f1;
-    }
-</style>
-""", unsafe_allow_html=True)
 
 pages = {
     "Home": "🏠",
@@ -113,7 +19,6 @@ pages = {
     "About": "ℹ️"
 }
 
-# [Keep all your existing data loading and recommendation functions exactly the same]
 # Load the data for content-based recommendations
 @st.cache_data
 def load_content_data():
@@ -157,16 +62,11 @@ def recommend_games(df, preferences):
     score_filter = df['User Score'] >= preferences['Minimum User Score']
     filtered_df = df[genre_filter & score_filter]
     return filtered_df
-    
-# Create a custom sidebar menu with improved styling
-st.sidebar.markdown("""
-<div style='padding: 10px; border-radius: 8px; background: #2c3e50; margin-bottom: 20px;'>
-    <h2 style='color: white; text-align: center;'>Navigation</h2>
-</div>
-""", unsafe_allow_html=True)
 
+# Create a custom sidebar menu
+st.sidebar.title("Navigation")
 for page, icon in pages.items():
-    if st.sidebar.button(f"{icon} {page}", key=f"btn_{page}"):
+    if st.sidebar.button(f"{icon} {page}"):
         st.session_state.page = page
 
 # Set the default page
@@ -178,69 +78,68 @@ page = st.session_state.page
 
 # Home Page
 if page == "Home":
-    st.markdown("<h1 class='title-text'>🎮 Welcome to the Game Recommendation System</h1>", unsafe_allow_html=True)
+    st.title("🎮 Welcome to the Game Recommendation System")
 
     st.markdown("""
-    <div class='custom-card' style='text-align: center; background: linear-gradient(135deg, #f5f7fa, #e3f2fd);'>
-        <h2 style='color: #3498db;'>Discover Your Next Favorite Game!</h2>
-        <p style='font-size: 16px;'>
-            Our advanced recommendation system helps you find games you'll love through multiple intelligent methods.
+    <div style='text-align: center;'>
+        <h2 style='color: #4CAF50; font-family: "Comic Sans MS", cursive; font-size: 2.5em;'>Discover Your Next Favorite Game!</h2>
+        <p style='font-size: 18px; color: white; font-family: "Arial", sans-serif;'>
+            Our Game Recommendation System helps you find games you’ll love based on various methods.
         </p>
     </div>
     """, unsafe_allow_html=True)
 
     # Section: Content-Based Recommendations
     st.markdown("""
-    <div class='custom-card content-card'>
-        <h3 class='section-header'>🔍 Content-Based Recommendations</h3>
-        <p>
-            Find games similar to your favorites by analyzing game features like genres, platforms, and publishers.
+    <div style='background-color: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0px 4px 8px rgba(0,0,0,0.1);'>
+        <h3 style='color: #2196F3; font-family: "Verdana", sans-serif; font-size: 1.8em;'>🔍 Content-Based Recommendations</h3>
+        <p style='font-size: 16px; color: black; font-family: "Georgia", serif; line-height: 1.6;'>
+            Find games similar to the ones you already enjoy! Enter the title of your favorite game, and we'll recommend similar titles based on genres, platforms, and publishers.
         </p>
-        <ul style='padding-left: 20px;'>
-            <li>Personalized recommendations based on game characteristics</li>
-            <li>No user history required - works for new users</li>
-            <li>Great for discovering similar gaming experiences</li>
+        <ul style='font-size: 16px; color: black; font-family: "Georgia", serif; line-height: 1.6; list-style-type: square;'>
+            <li>Discover new titles that match your interests.</li>
+            <li>Get personalized recommendations based on your game library.</li>
+            <li>Easy to use with just a few clicks.</li>
         </ul>
     </div>
     """, unsafe_allow_html=True)
 
     # Section: Top 10 Recommendations based on User Preferences
     st.markdown("""
-    <div class='custom-card knowledge-card'>
-        <h3 class='section-header'>📈 Top 10 Recommendations</h3>
-        <p>
-            Get personalized suggestions based on your specific preferences and filters.
+    <div style='background-color: #e8f5e9; padding: 20px; border-radius: 8px; margin-top: 20px; box-shadow: 0px 4px 8px rgba(0,0,0,0.1);'>
+        <h3 style='color: #4CAF50; font-family: "Verdana", sans-serif; font-size: 1.8em;'>📈 Top 10 Recommendations based on User Preferences</h3>
+        <p style='font-size: 16px; color: black; font-family: "Georgia", serif; line-height: 1.6;'>
+            Upload your own game data and filter results based on your preferences. Customize your search by entering preferred genres and minimum user scores to get the top 10 recommendations tailored just for you.
         </p>
-        <ul style='padding-left: 20px;'>
-            <li>Filter by genre, score, and other attributes</li>
-            <li>Upload your own game data for customized results</li>
-            <li>Export your recommendations for later reference</li>
+        <ul style='font-size: 16px; color: black; font-family: "Georgia", serif; line-height: 1.6; list-style-type: square;'>
+            <li>Upload your latest dataset for up-to-date recommendations.</li>
+            <li>Apply filters to match your taste and preferences.</li>
+            <li>Download your personalized recommendations as a CSV file.</li>
         </ul>
     </div>
     """, unsafe_allow_html=True)
 
     # Section: Game Correlation Finder
     st.markdown("""
-    <div class='custom-card correlation-card'>
-        <h3 class='section-header'>🔗 Game Correlation Finder</h3>
-        <p>
-            Discover how games relate to each other based on user ratings and preferences.
+    <div style='background-color: #fff3e0; padding: 20px; border-radius: 8px; margin-top: 20px; box-shadow: 0px 4px 8px rgba(0,0,0,0.1);'>
+        <h3 style='color: #FF5722; font-family: "Verdana", sans-serif; font-size: 1.8em;'>🔗 Game Correlation Finder</h3>
+        <p style='font-size: 16px; color: black; font-family: "Georgia", serif; line-height: 1.6;'>
+            Explore how games are related based on user ratings. Select a game to see its correlation with others, and find out which games share similar user reception.
         </p>
-        <ul style='padding-left: 20px;'>
-            <li>Find games with similar user appeal</li>
-            <li>See detailed correlation metrics</li>
-            <li>Identify hidden connections between games</li>
+        <ul style='font-size: 16px; color: black; font-family: "Georgia", serif; line-height: 1.6; list-style-type: square;'>
+            <li>Identify games with similar user scores.</li>
+            <li>Understand game relationships through detailed correlations.</li>
+            <li>Discover new games based on user ratings and correlations.</li>
         </ul>
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div style='text-align: center; margin-top: 30px; color: #7f8c8d;'>
-        <p>Select a feature from the sidebar to begin exploring</p>
+    <div style='text-align: center; margin-top: 40px; font-family: "Arial", sans-serif;'>
+        <h4>Use the navigation sidebar to explore different features of the app.</h4>
     </div>
     """, unsafe_allow_html=True)
 
-# [Keep all your other page implementations exactly the same - just the styling is enhanced]
 # Page 1: Content-Based Recommendations
 elif page == "Content-Based Recommendations":
     st.markdown("<h1 style='text-align: center; color: #4CAF50;'>🎮 Game Recommendation System</h1>", unsafe_allow_html=True)
@@ -435,10 +334,6 @@ elif page == "About":
     ### Creator:
     This app was created as part of an AI project to explore recommendation systems in gaming.
     """)
-    
+
 # Footer
-st.markdown("""
-<div class='footer'>
-    <p>Powered by Streamlit • Game Recommendation System • 2023</p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("<h5 style='text-align: center;'>Powered by Streamlit</h5>", unsafe_allow_html=True)
