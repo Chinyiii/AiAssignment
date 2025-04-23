@@ -240,14 +240,21 @@ elif page == "Content-Based Recommendations":
                             st.caption(f"Released: {row['Release Date']}")
                 
                 # NEW: Debug info for presentation
-                if st.checkbox("Show technical details"):
-                    st.write("Similarity calculation details:")
+                if st.checkbox("Show technical details", key="tech_details"):
+                    st.markdown("### 🛠️ How These Recommendations Were Generated")
+                    st.markdown("""
+                    **Algorithm Steps:**
+                    1. **Feature Engineering**: Combine Genres, Platforms, Publisher
+                    2. **TF-IDF Vectorization**: Convert text to numerical vectors
+                    3. **Cosine Similarity**: Calculate similarity between games
+                    4. **Top-N Selection**: Return most similar games
+                    """)
                     st.code("""
-                    # Algorithm Steps:
-                    1. Combine features (Genres + Platforms + Publisher)
-                    2. Convert to TF-IDF vectors
-                    3. Compute cosine similarity matrix
-                    4. Return most similar games
+                    # Core Implementation
+                    vectorizer = TfidfVectorizer(stop_words='english')
+                    content_matrix = vectorizer.fit_transform(df['content'])
+                    cosine_sim = cosine_similarity(content_matrix)
+                    sim_scores = list(enumerate(cosine_sim[game_index]))
                     """)
             else:
                 st.warning("No recommendations found. Try a different game.")
