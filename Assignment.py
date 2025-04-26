@@ -101,48 +101,6 @@ def recommend_games(df, preferences):
     filtered_df = df[genre_filter & score_filter]
     return filtered_df
 
-# ========== NEW EVALUATION FUNCTIONS ========== #
-def calculate_metrics(recommendations, game_name):
-    """Calculate evaluation metrics for recommendations"""
-    metrics = {}
-    
-    # For demonstration - in a real system you'd compare against known good recommendations
-    metrics['num_recommendations'] = len(recommendations)
-    
-    # Calculate average similarity score (content-based)
-    if not recommendations.empty:
-        vectorizer = TfidfVectorizer(stop_words='english')
-        content_matrix = vectorizer.fit_transform(df_content['content'])
-        cosine_sim = cosine_similarity(content_matrix, content_matrix)
-        idx = df_content[df_content['Title'].str.lower() == game_name.lower()].index[0]
-        
-        sim_scores = []
-        for _, row in recommendations.iterrows():
-            rec_idx = df_content[df_content['Title'] == row['Title']].index[0]
-            sim_scores.append(cosine_sim[idx][rec_idx])
-        
-        metrics['avg_similarity'] = sum(sim_scores)/len(sim_scores)
-        metrics['min_similarity'] = min(sim_scores)
-        metrics['max_similarity'] = max(sim_scores)
-    else:
-        metrics['avg_similarity'] = 0
-        metrics['min_similarity'] = 0
-        metrics['max_similarity'] = 0
-    
-    return metrics
-
-def collect_user_feedback():
-    """Component to collect user ratings for recommendations"""
-    st.subheader("Help us improve our recommendations!")
-    rating = st.slider("How relevant are these recommendations? (1-5)", 1, 5, 3)
-    comments = st.text_area("Any additional comments?")
-    
-    if st.button("Submit Feedback"):
-        # In a real app, you'd store this in a database
-        st.success("Thank you for your feedback! We'll use this to improve our recommendations.")
-        return {"rating": rating, "comments": comments}
-    return None
-
 # Create a custom sidebar menu
 st.sidebar.title("Navigation")
 for page, icon in pages.items():
@@ -299,9 +257,6 @@ elif page == "Content-Based Recommendations":
                     - **Genre Similarity Error**: 1 - Jaccard similarity of genres (0 = identical genres)
                     - **Lower values** indicate better matches
                     """)
-            
-            # Keep your existing user feedback component
-            feedback = collect_user_feedback()
             
         else:
             st.write("No matching game found. Please try another.")
