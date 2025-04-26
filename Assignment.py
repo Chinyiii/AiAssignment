@@ -269,6 +269,7 @@ if mae_results:
                      mae_results['Genre Cosine Error']]
         })
         st.bar_chart(metrics_df.set_index('Metric'))
+        pass
             
         else:
             st.write("No matching game found. Please try another.")
