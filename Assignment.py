@@ -59,61 +59,39 @@ def content_based_recommendations(game_name, num_recommendations=5):
     except IndexError:
         return pd.DataFrame(columns=['Title', 'Genres', 'User Score'])
         
-def enhanced_calculate_mae(recommendations, target_game):
+def calculate_mae(recommendations, target_game):
     """
-    Enhanced MAE calculation with more features and weighted scores
+    Calculate Mean Absolute Error between recommended games and target game
+    across multiple features.
     """
     try:
-        # Define features and their weights (adjust based on importance)
-        features = {
-            'User Score': {'weight': 0.4, 'type': 'numeric'},
-            'Genres': {'weight': 0.3, 'type': 'categorical'},
-            'Platforms': {'weight': 0.2, 'type': 'categorical'},
-            'Publisher': {'weight': 0.1, 'type': 'categorical'}
-        }
+        # Features to compare (numeric features only)
+        numeric_features = ['User Score']
         
+        # Calculate MAE for each feature
         mae_results = {}
-        weighted_errors = []
+        for feature in numeric_features:
+            target_value = target_game[feature]
+            recommended_values = recommendations[feature]
+            absolute_errors = abs(recommended_values - target_value)
+            mae_results[f"{feature} MAE"] = absolute_errors.mean()
         
-        for feature, config in features.items():
-            if config['type'] == 'numeric':
-                # For numeric features (like User Score)
-                target_value = target_game[feature]
-                recommended_values = recommendations[feature]
-                absolute_errors = abs(recommended_values - target_value)
-                feature_mae = absolute_errors.mean()
-                mae_results[f"{feature} MAE"] = feature_mae
-                weighted_errors.append(feature_mae * config['weight'])
-                
-            elif config['type'] == 'categorical':
-                # For categorical features (like Genres, Platforms)
-                target_values = set(str(target_game[feature]).split(', '))
-                similarities = []
-                
-                for _, row in recommendations.iterrows():
-                    rec_values = set(str(row[feature]).split(', '))
-                    if not target_values or not rec_values:
-                        similarity = 0  # If either is empty
-                    else:
-                        # Jaccard similarity
-                        intersection = len(target_values & rec_values)
-                        union = len(target_values | rec_values)
-                        similarity = intersection / union if union else 0
-                    
-                    # Convert similarity to "error" (1 - similarity)
-                    similarities.append(1 - similarity)
-                
-                feature_mae = sum(similarities) / len(similarities)
-                mae_results[f"{feature} Similarity Error"] = feature_mae
-                weighted_errors.append(feature_mae * config['weight'])
+        # For categorical features (like genres), we can calculate similarity
+        # Count genre matches (this is a simple approach - could be enhanced)
+        target_genres = set(target_game['Genres'].split(', '))
+        genre_overlaps = []
         
-        # Calculate overall weighted MAE
-        mae_results['Weighted MAE'] = sum(weighted_errors)
+        for _, row in recommendations.iterrows():
+            rec_genres = set(row['Genres'].split(', '))
+            overlap = len(target_genres & rec_genres) / len(target_genres | rec_genres)
+            genre_overlaps.append(1 - overlap)  # Convert similarity to "error"
+        
+        mae_results["Genre Similarity Error"] = sum(genre_overlaps)/len(genre_overlaps)
         
         return mae_results
     
     except Exception as e:
-        st.error(f"Error in enhanced MAE calculation: {str(e)}")
+        st.error(f"Could not calculate MAE: {str(e)}")
         return None
         
 # Function to recommend games based on file upload and filters
@@ -237,7 +215,7 @@ elif page == "Content-Based Recommendations":
             st.subheader("Recommendation Accuracy Metrics")
             
             # Calculate MAE
-            mae_results = enhanced_calculate_mae(recommendations, game_info)
+            mae_results =calculate_mae(recommendations, game_info)
             
             if mae_results:
                 # Display MAE metrics in columns
