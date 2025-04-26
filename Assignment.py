@@ -18,14 +18,24 @@ pages = {
     "Game Correlation Finder": "🔗",
     "About": "ℹ️"
 }
-
 # Load the data for content-based recommendations
 @st.cache_data
 def load_content_data():
     df = pd.read_csv('all_video_games(cleaned).csv')
-    df = df.dropna(subset=['Genres', 'Platforms', 'Publisher', 'User Score'])  # Drop rows with essential missing values
-    df['User Score'] = df['User Score'].astype(float)  # Ensure correct data type for user score
-    df['content'] = df['Genres'] + ' ' + df['Platforms'] + ' ' + df['Publisher']
+    df = df.dropna(subset=['Genres', 'Platforms', 'Publisher', 'User Score'])
+    df['User Score'] = df['User Score'].astype(float)
+    
+    # Enhanced content with feature weighting
+    df['content'] = (
+        df['Genres'] + ' ' + df['Genres'] + ' ' +  # Double-weight genres
+        df['Platforms'] + ' ' +
+        df['Publisher']
+    )
+    
+    # Add Developer if available in dataset
+    if 'Developer' in df.columns:
+        df['content'] = df['content'] + ' ' + df['Developer']
+        
     return df
 
 # Load the data for correlation finder
@@ -41,20 +51,42 @@ def load_correlation_data():
 df_content = load_content_data()
 df_corr = load_correlation_data()
 
-# Function to recommend games based on cosine similarity
-def content_based_recommendations(game_name, num_recommendations=5):
-    vectorizer = TfidfVectorizer(stop_words='english')
+# Pre-compute similarity matrix for better performance
+@st.cache_data
+def compute_similarity_matrix():
+    vectorizer = TfidfVectorizer(
+        stop_words='english',
+        min_df=2,
+        max_df=0.85,
+        ngram_range=(1, 2)
     content_matrix = vectorizer.fit_transform(df_content['content'])
+    return cosine_similarity(content_matrix, content_matrix)
 
-    try:
-        cosine_sim = cosine_similarity(content_matrix, content_matrix)
-        idx = df_content[df_content['Title'].str.lower() == game_name.lower()].index[0]
-        sim_scores = list(enumerate(cosine_sim[idx]))
-        sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-        sim_indices = [i[0] for i in sim_scores[1:num_recommendations+1]]
-        return df_content.iloc[sim_indices][['Title', 'Genres', 'User Score', 'Platforms', 'Release Date']]
-    except IndexError:
-        return pd.DataFrame(columns=['Title', 'Genres', 'User Score'])
+similarity_matrix = compute_similarity_matrix()
+
+# Enhanced recommendation function
+def content_based_recommendations(game_name, num_recommendations=5):
+    # Try exact match first
+    game_matches = df_content[df_content['Title'].str.lower() == game_name.lower()]
+    
+    # If no exact match, try partial matching
+    if game_matches.empty:
+        game_matches = df_content[df_content['Title'].str.lower().str.contains(game_name.lower())]
+        if not game_matches.empty:
+            st.warning(f"No exact match found. Showing results containing '{game_name}'")
+    
+    if game_matches.empty:
+        return pd.DataFrame(), "No matching game found. Please check spelling."
+    
+    idx = game_matches.index[0]
+    sim_scores = list(enumerate(similarity_matrix[idx]))
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+    sim_indices = [i[0] for i in sim_scores[1:num_recommendations+1]]
+    
+    recommendations = df_content.iloc[sim_indices][['Title', 'Genres', 'User Score', 'Platforms', 'Release Date']]
+    recommendations['Similarity Score'] = [f"{score[1]:.1%}" for score in sim_scores[1:num_recommendations+1]]
+    
+    return recommendations, None
 
 # Function to recommend games based on file upload and filters
 def recommend_games(df, preferences):
@@ -146,32 +178,93 @@ elif page == "Content-Based Recommendations":
     st.markdown("<h2>Find Games Similar to Your Favorite</h2>", unsafe_allow_html=True)
     st.write("This app helps you find games similar to the ones you like. Enter the game title below to get recommendations.")
 
-    # Add a selectbox for game selection
-    game_list = df_content['Title'].unique()
-    game_input = st.selectbox("Choose a game from the list:", game_list)
+    # Create two columns for input options
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        # Add a selectbox for game selection from list
+        game_list = sorted(df_content['Title'].unique())
+        game_input = st.selectbox("Choose a game from the list:", game_list)
+    
+    with col2:
+        # Add a text input for manual entry
+        manual_input = st.text_input("Or type a game title:", "")
+        if manual_input:
+            game_input = manual_input
 
-    # Filters within the main page
-    st.subheader("Filters")
-    num_recommendations = st.slider('Number of recommendations', min_value=1, max_value=10, value=5)
+    # Advanced Filters
+    st.subheader("Recommendation Settings")
+    
+    # Create columns for filters
+    filter_col1, filter_col2 = st.columns(2)
+    
+    with filter_col1:
+        num_recommendations = st.slider('Number of recommendations', min_value=1, max_value=20, value=5)
+    
+    with filter_col2:
+        platform_filter = st.multiselect(
+            'Filter by platform (optional):',
+            options=sorted(set([platform for platforms in df_content['Platforms'].dropna() for platform in platforms.split(', ')])),
+            default=[]
+        )
 
     # Game information display
     if game_input:
-        game_info = df_content[df_content['Title'] == game_input].iloc[0]
-        st.markdown(f"### Selected Game: {game_info['Title']}")
-        st.write(f"Genres: {game_info['Genres']}")
-        st.write(f"Platforms: {game_info['Platforms']}")
-        st.write(f"Publisher: {game_info['Publisher']}")
-        st.write(f"User Score: {game_info['User Score']}")
-        st.write(f"Release Date: {game_info['Release Date']}")
+        try:
+            game_info = df_content[df_content['Title'].str.lower() == game_input.lower()].iloc[0]
+            st.markdown(f"### Selected Game: {game_info['Title']}")
+            
+            # Display game info in columns
+            info_col1, info_col2 = st.columns(2)
+            
+            with info_col1:
+                st.write(f"**Genres:** {game_info['Genres']}")
+                st.write(f"**Platforms:** {game_info['Platforms']}")
+                st.write(f"**Publisher:** {game_info['Publisher']}")
+            
+            with info_col2:
+                st.write(f"**User Score:** {game_info['User Score']:.1f}/10")
+                st.write(f"**Release Date:** {game_info['Release Date']}")
+                if 'Developer' in game_info:
+                    st.write(f"**Developer:** {game_info['Developer']}")
+        
+        except (IndexError, KeyError):
+            pass  # Will be handled in recommendation function
 
     # Button to get recommendations
-    if st.button('Get Recommendations'):
-        recommendations = content_based_recommendations(game_input, num_recommendations)
-        if not recommendations.empty:
-            st.markdown(f"### Games similar to {game_input}:")
-            st.table(recommendations)
-        else:
-            st.write("No matching game found. Please try another.")
+    if st.button('Get Recommendations', type="primary"):
+        with st.spinner("Finding similar games..."):
+            recommendations, message = content_based_recommendations(game_input, num_recommendations)
+            
+            if message:
+                st.error(message)
+            
+            if not recommendations.empty:
+                # Apply platform filter if selected
+                if platform_filter:
+                    recommendations = recommendations[
+                        recommendations['Platforms'].apply(
+                            lambda x: any(platform in str(x) for platform in platform_filter)
+                    )]
+                
+                if not recommendations.empty:
+                    st.markdown(f"### Games similar to '{game_input}':")
+                    st.dataframe(
+                        recommendations,
+                        column_config={
+                            "User Score": st.column_config.NumberColumn(
+                                "User Score",
+                                format="%.1f/10"
+                            ),
+                            "Similarity Score": st.column_config.TextColumn(
+                                "Similarity"
+                            )
+                        }
+                    )
+                else:
+                    st.warning("No games match your platform filter. Try adjusting your filters.")
+            else:
+                st.error("No recommendations found. Please try a different game title.")
 
 # Page 2: File Upload and Filters
 elif page == "Top 10 Recommendation based on User Preferences":
