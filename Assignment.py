@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from fuzzywuzzy import process  # You'll need to install this: pip install fuzzywuzzy[speedup]
+from thefuzz import process
 
 # Set page config
 st.set_page_config(
