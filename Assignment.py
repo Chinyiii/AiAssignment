@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics import mean_squared_error
+from sklearn.feature_extraction.text import CountVectorizer
 
 # Set page config
 st.set_page_config(
@@ -58,41 +59,47 @@ def content_based_recommendations(game_name, num_recommendations=5):
     except IndexError:
         return pd.DataFrame(columns=['Title', 'Genres', 'User Score'])
         
-#Function for calculate the MAE for the content based
-def calculate_mae(recommendations, target_game):
+def calculate_mae_with_cosine(recommendations, target_game):
     """
-    Calculate Mean Absolute Error between recommended games and target game
-    across multiple features.
+    Calculate MAE using cosine similarity for genres
     """
     try:
-        # Features to compare (numeric features only)
-        numeric_features = ['User Score']
+        # User Score MAE (same as before)
+        user_score_mae = abs(recommendations['User Score'] - target_game['User Score']).mean()
         
-        # Calculate MAE for each feature
-        mae_results = {}
-        for feature in numeric_features:
-            target_value = target_game[feature]
-            recommended_values = recommendations[feature]
-            absolute_errors = abs(recommended_values - target_value)
-            mae_results[f"{feature} MAE"] = absolute_errors.mean()
+        # Genre Cosine Similarity Error
+        target_genres = target_game['Genres']
+        recommended_genres = recommendations['Genres'].tolist()
+        genre_error = calculate_genre_cosine_similarity(target_genres, recommended_genres)
         
-        # For categorical features (like genres), we can calculate similarity
-        # Count genre matches (this is a simple approach - could be enhanced)
-        target_genres = set(target_game['Genres'].split(', '))
-        genre_overlaps = []
-        
-        for _, row in recommendations.iterrows():
-            rec_genres = set(row['Genres'].split(', '))
-            overlap = len(target_genres & rec_genres) / len(target_genres | rec_genres)
-            genre_overlaps.append(1 - overlap)  # Convert similarity to "error"
-        
-        mae_results["Genre Similarity Error"] = sum(genre_overlaps)/len(genre_overlaps)
-        
-        return mae_results
+        return {
+            'User Score MAE': user_score_mae,
+            'Genre Cosine Error': genre_error,
+            'Overall MAE': (user_score_mae + genre_error) / 2
+        }
     
     except Exception as e:
-        st.error(f"Could not calculate MAE: {str(e)}")
+        st.error(f"MAE calculation error: {str(e)}")
         return None
+
+def calculate_genre_cosine_similarity(target_genres, recommended_genres_list):
+    """
+    Calculate cosine similarity between target game's genres and recommended games' genres
+    """
+    # Combine all genre lists for vectorization
+    all_genres = [target_genres] + recommended_genres_list
+    
+    # Create binary vectors (1 if genre present, 0 otherwise)
+    vectorizer = CountVectorizer(binary=True, tokenizer=lambda x: x.split(', '))
+    genre_matrix = vectorizer.fit_transform(all_genres)
+    
+    # Calculate cosine similarities between target and recommendations
+    similarities = cosine_similarity(genre_matrix[0:1], genre_matrix[1:])
+    
+    # Convert to errors (1 - similarity)
+    errors = 1 - similarities.flatten()
+    
+    return errors.mean()  # Return average error
 
 # Function to recommend games based on file upload and filters
 def recommend_games(df, preferences):
@@ -210,53 +217,58 @@ elif page == "Content-Based Recommendations":
             st.markdown(f"### Games similar to {game_input}:")
             st.table(recommendations)
             
-            # ========== NEW MAE CALCULATION ========== #
-            st.markdown("---")
-            st.subheader("Recommendation Accuracy Metrics")
-            
-            # Calculate MAE
-            mae_results = calculate_mae(recommendations, game_info)
-            
-            if mae_results:
-                # Display MAE metrics in columns
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.metric("User Score MAE", 
-                             f"{mae_results.get('User Score MAE', 0):.2f}",
-                             help="Lower is better (0 = perfect match)")
-                
-                with col2:
-                    st.metric("Genre Similarity Error", 
-                             f"{mae_results.get('Genre Similarity Error', 0):.2f}",
-                             help="Lower is better (0 = perfect match)")
-                
-                with col3:
-                    avg_mae = (mae_results.get('User Score MAE', 0) + 
-                              mae_results.get('Genre Similarity Error', 0)) / 2
-                    st.metric("Overall MAE", 
-                             f"{avg_mae:.2f}",
-                             help="Average of all feature errors")
-                
-                # Visualize the errors
-                with st.expander("View Detailed Error Analysis"):
-                    # Create a DataFrame for visualization
-                    mae_df = pd.DataFrame({
-                        'Metric': ['User Score', 'Genre Similarity'],
-                        'MAE': [mae_results['User Score MAE'], 
-                               mae_results['Genre Similarity Error']]
-                    })
-                    
-                    # Plot using Streamlit's native bar chart
-                    st.bar_chart(mae_df.set_index('Metric'))
-                    
-                    # Interpretation
-                    st.markdown("""
-                    **How to interpret MAE:**
-                    - **User Score MAE**: Average difference in user ratings between recommended and target game
-                    - **Genre Similarity Error**: 1 - Jaccard similarity of genres (0 = identical genres)
-                    - **Lower values** indicate better matches
-                    """)
+           # ========== COSINE SIMILARITY MAE CALCULATION ========== #
+st.markdown("---")
+st.subheader("Recommendation Accuracy Metrics")
+
+# Calculate MAE with cosine similarity
+mae_results = calculate_mae_with_cosine(recommendations, game_info)
+
+if mae_results:
+    # Display metrics in columns
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("User Score MAE", 
+                 f"{mae_results['User Score MAE']:.2f}",
+                 help="Average absolute difference in user scores (0-10 scale)")
+    
+    with col2:
+        st.metric("Genre Cosine Error", 
+                 f"{mae_results['Genre Cosine Error']:.2f}",
+                 help="1 - cosine similarity (0 = perfect match)")
+    
+    with col3:
+        st.metric("Overall MAE", 
+                 f"{mae_results['Overall MAE']:.2f}",
+                 help="Weighted average of both metrics")
+    
+    # Detailed analysis
+    with st.expander("📊 Detailed Similarity Analysis"):
+        # Create similarity explanation
+        st.markdown("""
+        ### How Genre Similarity is Calculated:
+        1. Each game's genres are converted to binary vectors
+        2. Cosine similarity computes the angle between vectors
+        3. Error = 1 - similarity score
+        """)
+        
+        # Show example calculation
+        st.markdown("""
+        **Example:**
+        - Target Genres: Action, Adventure → [1, 1, 0, 0]
+        - Recommended: Action, RPG → [1, 0, 1, 0]
+        - Cosine Similarity = (1*1 + 1*0 + 0*1 + 0*0) / (√2 * √2) = 0.5
+        - Error = 1 - 0.5 = 0.5
+        """)
+        
+        # Visualize metrics
+        metrics_df = pd.DataFrame({
+            'Metric': ['User Score MAE', 'Genre Cosine Error'],
+            'Value': [mae_results['User Score MAE'], 
+                     mae_results['Genre Cosine Error']]
+        })
+        st.bar_chart(metrics_df.set_index('Metric'))
             
         else:
             st.write("No matching game found. Please try another.")
