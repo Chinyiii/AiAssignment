@@ -3,7 +3,6 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics import mean_squared_error
-from sklearn.feature_extraction.text import CountVectorizer
 
 # Set page config
 st.set_page_config(
