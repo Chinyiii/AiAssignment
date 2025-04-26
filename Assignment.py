@@ -57,6 +57,42 @@ def content_based_recommendations(game_name, num_recommendations=5):
         return df_content.iloc[sim_indices][['Title', 'Genres', 'User Score', 'Platforms', 'Release Date']]
     except IndexError:
         return pd.DataFrame(columns=['Title', 'Genres', 'User Score'])
+        
+#Function for calculate the MAE for the content based
+def calculate_mae(recommendations, target_game):
+    """
+    Calculate Mean Absolute Error between recommended games and target game
+    across multiple features.
+    """
+    try:
+        # Features to compare (numeric features only)
+        numeric_features = ['User Score']
+        
+        # Calculate MAE for each feature
+        mae_results = {}
+        for feature in numeric_features:
+            target_value = target_game[feature]
+            recommended_values = recommendations[feature]
+            absolute_errors = abs(recommended_values - target_value)
+            mae_results[f"{feature} MAE"] = absolute_errors.mean()
+        
+        # For categorical features (like genres), we can calculate similarity
+        # Count genre matches (this is a simple approach - could be enhanced)
+        target_genres = set(target_game['Genres'].split(', '))
+        genre_overlaps = []
+        
+        for _, row in recommendations.iterrows():
+            rec_genres = set(row['Genres'].split(', '))
+            overlap = len(target_genres & rec_genres) / len(target_genres | rec_genres)
+            genre_overlaps.append(1 - overlap)  # Convert similarity to "error"
+        
+        mae_results["Genre Similarity Error"] = sum(genre_overlaps)/len(genre_overlaps)
+        
+        return mae_results
+    
+    except Exception as e:
+        st.error(f"Could not calculate MAE: {str(e)}")
+        return None
 
 # Function to recommend games based on file upload and filters
 def recommend_games(df, preferences):
@@ -185,7 +221,7 @@ if page == "Home":
     """, unsafe_allow_html=True)
 
 
-# ========== MODIFIED CONTENT-BASED RECOMMENDATIONS PAGE ========== #
+# Then modify your content-based recommendations section to include MAE:
 elif page == "Content-Based Recommendations":
     st.markdown("<h1 style='text-align: center; color: #4CAF50;'>🎮 Game Recommendation System</h1>", unsafe_allow_html=True)
     st.markdown("<h2>Find Games Similar to Your Favorite</h2>", unsafe_allow_html=True)
@@ -216,86 +252,59 @@ elif page == "Content-Based Recommendations":
             st.markdown(f"### Games similar to {game_input}:")
             st.table(recommendations)
             
-            # ========== NEW EVALUATION COMPONENTS ========== #
+            # ========== NEW MAE CALCULATION ========== #
             st.markdown("---")
-            st.subheader("Recommendation Quality Metrics")
+            st.subheader("Recommendation Accuracy Metrics")
             
-            # Calculate metrics
-            metrics = calculate_metrics(recommendations, game_input)
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Number of Recommendations", metrics['num_recommendations'])
-            with col2:
-                st.metric("Average Similarity", f"{metrics['avg_similarity']:.2f}")
-            with col3:
-                st.metric("Similarity Range", 
-                         f"{metrics['min_similarity']:.2f}-{metrics['max_similarity']:.2f}")
+            # Calculate MAE
+            mae_results = calculate_mae(recommendations, game_info)
             
-            # User feedback
+            if mae_results:
+                # Display MAE metrics in columns
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("User Score MAE", 
+                             f"{mae_results.get('User Score MAE', 0):.2f}",
+                             help="Lower is better (0 = perfect match)")
+                
+                with col2:
+                    st.metric("Genre Similarity Error", 
+                             f"{mae_results.get('Genre Similarity Error', 0):.2f}",
+                             help="Lower is better (0 = perfect match)")
+                
+                with col3:
+                    avg_mae = (mae_results.get('User Score MAE', 0) + 
+                              mae_results.get('Genre Similarity Error', 0)) / 2
+                    st.metric("Overall MAE", 
+                             f"{avg_mae:.2f}",
+                             help="Average of all feature errors")
+                
+                # Visualize the errors
+                with st.expander("View Detailed Error Analysis"):
+                    # Create a DataFrame for visualization
+                    mae_df = pd.DataFrame({
+                        'Metric': ['User Score', 'Genre Similarity'],
+                        'MAE': [mae_results['User Score MAE'], 
+                               mae_results['Genre Similarity Error']]
+                    })
+                    
+                    # Plot using Streamlit's native bar chart
+                    st.bar_chart(mae_df.set_index('Metric'))
+                    
+                    # Interpretation
+                    st.markdown("""
+                    **How to interpret MAE:**
+                    - **User Score MAE**: Average difference in user ratings between recommended and target game
+                    - **Genre Similarity Error**: 1 - Jaccard similarity of genres (0 = identical genres)
+                    - **Lower values** indicate better matches
+                    """)
+            
+            # Keep your existing user feedback component
             feedback = collect_user_feedback()
             
         else:
             st.write("No matching game found. Please try another.")
-
-# ========== NEW EVALUATION PAGE ========== #
-elif page == "System Evaluation":
-    st.title("📊 System Evaluation")
-    
-    st.markdown("""
-    ## Recommendation System Performance
-    These metrics help us evaluate how well our recommendation system is performing.
-    """)
-    
-    # Sample evaluation metrics (in a real system, these would be calculated from actual usage data)
-    st.subheader("Overall System Metrics")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Average Recommendation Accuracy", "82%", "2% from last month")
-    with col2:
-        st.metric("User Satisfaction Score", "4.3/5", "0.1 from last month")
-    with col3:
-        st.metric("Mean Similarity Score", "0.76", "0.02 from last month")
-    
-    st.markdown("---")
-    st.subheader("Test Case Evaluations")
-    
-    # Sample test cases
-    test_games = ["The Legend of Zelda", "Mario Kart", "Fortnite", "Minecraft"]
-    test_results = []
-    
-    for game in test_games:
-        try:
-            recs = content_based_recommendations(game, 5)
-            if not recs.empty:
-                metrics = calculate_metrics(recs, game)
-                test_results.append({
-                    "Game": game,
-                    "Num Recommendations": len(recs),
-                    "Avg Similarity": f"{metrics['avg_similarity']:.2f}",
-                    "Min Similarity": f"{metrics['min_similarity']:.2f}",
-                    "Max Similarity": f"{metrics['max_similarity']:.2f}"
-                })
-        except:
-            continue
-    
-    if test_results:
-        st.table(pd.DataFrame(test_results))
-    else:
-        st.warning("No test results available")
-    
-    st.markdown("---")
-    st.subheader("Business Impact")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Estimated Engagement Increase", "23%", "3% from last quarter")
-        st.metric("Conversion Rate", "12%", "1.2% from last quarter")
-    with col2:
-        st.metric("Average Session Duration", "+4.7 minutes", "0.5m from last quarter")
-        st.metric("Customer Retention", "68%", "5% from last quarter")
-
-# [Keep all your other pages (Home, Top 10 Recommendations, Game Correlation Finder, About) exactly the same...]
 
 # Page 2: File Upload and Filters
 elif page == "Top 10 Recommendation based on User Preferences":
