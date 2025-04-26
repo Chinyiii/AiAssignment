@@ -55,14 +55,29 @@ df_corr = load_correlation_data()
 # Pre-compute similarity matrix for better performance
 @st.cache_data
 def compute_similarity_matrix():
-    vectorizer = TfidfVectorizer(
-        stop_words='english',
-        min_df=2,
-        max_df=0.85,
-        ngram_range=(1, 2)
-    )
-    content_matrix = vectorizer.fit_transform(df_content['content'])
-    return cosine_similarity(content_matrix, content_matrix)
+    try:
+        # Check if content column exists and has data
+        if 'content' not in df_content.columns or df_content['content'].empty:
+            st.error("Content column is missing or empty!")
+            return None
+            
+        # Verify there's actual text content
+        if df_content['content'].str.strip().eq('').all():
+            st.error("All content fields are empty after processing!")
+            return None
+            
+        vectorizer = TfidfVectorizer(
+            stop_words='english',
+            min_df=2,
+            max_df=0.85,
+            ngram_range=(1, 2)
+        )
+        content_matrix = vectorizer.fit_transform(df_content['content'])
+        return cosine_similarity(content_matrix, content_matrix)
+        
+    except Exception as e:
+        st.error(f"Error computing similarity matrix: {str(e)}")
+        return None
 
 similarity_matrix = compute_similarity_matrix()
 
