@@ -18,6 +18,7 @@ pages = {
     "Game Correlation Finder": "🔗",
     "About": "ℹ️"
 }
+
 # Load the data for content-based recommendations
 @st.cache_data
 def load_content_data():
