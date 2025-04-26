@@ -17,7 +17,6 @@ pages = {
     "Content-Based Recommendations": "🔍",
     "Top 10 Recommendation based on User Preferences": "📈",
     "Game Correlation Finder": "🔗",
-    "System Evaluation": "📊",  # Added new evaluation page
     "About": "ℹ️"
 }
 
