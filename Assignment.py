@@ -60,6 +60,7 @@ def compute_similarity_matrix():
         min_df=2,
         max_df=0.85,
         ngram_range=(1, 2)
+    )
     content_matrix = vectorizer.fit_transform(df_content['content'])
     return cosine_similarity(content_matrix, content_matrix)
 
