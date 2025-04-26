@@ -250,12 +250,12 @@ elif page == "Content-Based Recommendations":
                     st.bar_chart(mae_df.set_index('Metric'))
                     
                    # Interpretation
-st.markdown("""
-**How to interpret MAE:**
-- **User Score MAE**: Average difference in user ratings between recommended and target game
-- **Genre Similarity Error**: 1 - cosine similarity of genres (0 = identical genres)
-- **Lower values** indicate better matches
-""")
+                    st.markdown("""
+                    **How to interpret MAE:**
+                    - **User Score MAE**: Average difference in user ratings between recommended and target game
+                    - **Genre Similarity Error**: 1 - cosine similarity of genres (0 = identical genres)
+                    - **Lower values** indicate better matches
+                    """)
             
         else:
             st.write("No matching game found. Please try another.")
