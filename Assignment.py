@@ -59,10 +59,6 @@ def content_based_recommendations(game_name, num_recommendations=5):
         return pd.DataFrame(columns=['Title', 'Genres', 'User Score'])
         
 def calculate_mae(recommendations, target_game):
-    """
-    Calculate Mean Absolute Error between recommended games and target game
-    across multiple features.
-    """
     try:
         # Features to compare (numeric features only)
         numeric_features = ['User Score']
@@ -74,18 +70,22 @@ def calculate_mae(recommendations, target_game):
             recommended_values = recommendations[feature]
             absolute_errors = abs(recommended_values - target_value)
             mae_results[f"{feature} MAE"] = absolute_errors.mean()
+
+        # Combine target and recommendations genres into a list
+        all_genres = [target_game['Genres']] + recommendations['Genres'].tolist()
         
-        # For categorical features (like genres), we can calculate similarity
-        # Count genre matches (this is a simple approach - could be enhanced)
-        target_genres = set(target_game['Genres'].split(', '))
-        genre_overlaps = []
+        # TF-IDF Vectorization
+        vectorizer = TfidfVectorizer()
+        tfidf_matrix = vectorizer.fit_transform(all_genres)
         
-        for _, row in recommendations.iterrows():
-            rec_genres = set(row['Genres'].split(', '))
-            overlap = len(target_genres & rec_genres) / len(target_genres | rec_genres)
-            genre_overlaps.append(1 - overlap)  # Convert similarity to "error"
+        # Calculate cosine similarities (first row is target)
+        cosine_similarities = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:]).flatten()
         
-        mae_results["Genre Similarity Error"] = sum(genre_overlaps)/len(genre_overlaps)
+        # Cosine similarity is 1 for perfect match, so error = 1 - cosine_sim
+        genre_errors = 1 - cosine_similarities
+        
+        # Mean of genre errors
+        mae_results["Genre Similarity Error"] = genre_errors.mean()
         
         return mae_results
     
