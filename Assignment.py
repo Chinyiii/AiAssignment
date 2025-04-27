@@ -259,8 +259,7 @@ elif page == "Content-Based Recommendations":
             
         else:
             st.write("No matching game found. Please try another.")
-
-# Page 2: File Upload and Filters
+            
 # Page 2: File Upload and Filters
 elif page == "Top 10 Recommendation based on User Preferences":
     st.title("🎮 Personalized Game Recommendations")
