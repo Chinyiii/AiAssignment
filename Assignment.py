@@ -261,83 +261,200 @@ elif page == "Content-Based Recommendations":
             st.write("No matching game found. Please try another.")
 
 # Page 2: File Upload and Filters
+# Page 2: File Upload and Filters
 elif page == "Top 10 Recommendation based on User Preferences":
-    st.title("📂 Upload Latest Dataset")
+    st.title("🎮 Personalized Game Recommendations")
     st.markdown("""
-    Follow these steps to get personalized game recommendations:
-    1. Upload your game data in CSV format(Ensure that the dataset is the latest).
-    2. Enter your preferred genre and minimum user score.
-    3. Click "Get Recommendations" to view the top suggestions.
-    """)
+    <div style='padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
+        <h3 style='color: #2e7d32;'>How to use this feature:</h3>
+        <ol style='line-height: 1.6;'>
+            <li>Upload your game dataset in CSV format (must include 'Title', 'Genres', 'User Score')</li>
+            <li>Set your preferences below</li>
+            <li>Click "Get Recommendations" to view your Top 10 games</li>
+            <li>Download your list</li>
+        </ol>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # Upload section
-    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+    # Upload Section
+    with st.expander("📤 Upload Your Game Dataset", expanded=True):
+        uploaded_file = st.file_uploader(
+            "Drag and drop or browse your CSV file",
+            type="csv",
+            help="Must include 'Title', 'Genres', 'User Score'"
+        )
 
     if uploaded_file is not None:
         try:
-            # Load the dataset
-            df_uploaded = pd.read_csv(uploaded_file)
-            
-            # Data processing
-            df_uploaded['Genres'] = df_uploaded['Genres'].astype(str).fillna('')
-            df_uploaded['User Score'] = pd.to_numeric(df_uploaded['User Score'], errors='coerce')
+            with st.spinner("Processing your dataset..."):
+                df_uploaded = pd.read_csv(uploaded_file)
 
-            # Display dataset preview
-            st.write("### Dataset Preview")
-            st.dataframe(df_uploaded.head())
+                required_columns = ['Title', 'Genres', 'User Score']
+                missing_cols = [col for col in required_columns if col not in df_uploaded.columns]
+                
+                if missing_cols:
+                    st.error(f"Missing columns: {', '.join(missing_cols)}")
+                    st.stop()
 
-            # Filter options section
-            st.subheader("🎯 Filter Options")
+                df_uploaded['Genres'] = df_uploaded['Genres'].astype(str).fillna('')
+                df_uploaded['User Score'] = pd.to_numeric(df_uploaded['User Score'], errors='coerce')
+                df_uploaded = df_uploaded.dropna(subset=['User Score'])
 
-            genres = st.text_input(
-                "Preferred Genre (e.g., Action, Adventure):",
-                value="",
-                placeholder="Enter genres (e.g., Action, Adventure)",
-                help="Enter the genre(s) you like. Use commas for multiple genres."
-            ).strip()
+                st.success(f"✅ Loaded {len(df_uploaded)} games successfully")
 
-            min_user_score_str = st.text_input(
-                "Minimum Acceptable User Score (0.0 to 10.0):",
-                value="0.0",
-                placeholder="Enter a score between 0.0 and 10.0",
-                help="Enter a number between 0.0 and 10.0 for the minimum score."
-            )
+                # Show dataset stats
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Games", len(df_uploaded))
+                with col2:
+                    st.metric("Unique Genres", df_uploaded['Genres'].nunique())
+                with col3:
+                    st.metric("Avg User Score", f"{df_uploaded['User Score'].mean():.1f}/10")
 
-            try:
-                min_user_score = float(min_user_score_str)
-                if min_user_score < 0.0 or min_user_score > 10.0:
-                    st.error("Score must be between 0.0 and 10.0.")
-                    min_user_score = 0.0
-            except ValueError:
-                st.error("Please enter a valid numeric score.")
-                min_user_score = 0.0
+            with st.expander("🔍 Set Your Preferences", expanded=True):
+                st.subheader("Filter Options")
 
-            # Recommendations button
-            if st.button("Get Recommendations"):
-                with st.spinner("Processing your request..."):
+                all_genres = sorted(set(g for genres in df_uploaded['Genres'].str.split(', ') for g in genres if g))
+                selected_genres = st.multiselect("Preferred Genres:", options=all_genres, default=[])
+
+                min_score, max_score = st.slider(
+                    "User Score Range:", 0.0, 10.0, (6.0, 10.0), step=0.1, format="%.1f"
+                )
+
+                st.subheader("Advanced Filters")
+                col1, col2 = st.columns(2)
+                with col1:
+                    min_reviews = st.number_input(
+                        "Minimum User Reviews:", min_value=0, value=10
+                    )
+                with col2:
+                    year_range = st.slider(
+                        "Release Year Range:", 1980, 2025, (2000, 2023)
+                    )
+
+            if st.button("🎯 Get My Recommendations", use_container_width=True):
+                with st.spinner("Finding games for you..."):
                     try:
-                        recommended_games = recommend_games(df_uploaded, {'Genres': genres, 'Minimum User Score': min_user_score})
-                        if not recommended_games.empty:
-                            top_10_games = recommended_games.head(10)
-                            st.write("### Top 10 Recommended Games")
-                            st.dataframe(top_10_games)
+                        filtered_df = df_uploaded.copy()
 
-                            # Download 
-                            csv = top_10_games.to_csv(index=False)
+                        # Apply genre filter
+                        if selected_genres:
+                            genre_filter = filtered_df['Genres'].apply(
+                                lambda x: any(genre in x for genre in selected_genres)
+                            )
+                            filtered_df = filtered_df[genre_filter]
+
+                        # Apply score filter
+                        filtered_df = filtered_df[
+                            (filtered_df['User Score'] >= min_score) & (filtered_df['User Score'] <= max_score)
+                        ]
+
+                        # Apply additional filters
+                        if 'User Ratings Count' in filtered_df.columns:
+                            filtered_df = filtered_df[filtered_df['User Ratings Count'] >= min_reviews]
+
+                        if 'Release Date' in filtered_df.columns:
+                            filtered_df['Release Year'] = pd.to_datetime(
+                                filtered_df['Release Date'], errors='coerce'
+                            ).dt.year
+                            filtered_df = filtered_df[
+                                (filtered_df['Release Year'] >= year_range[0]) & 
+                                (filtered_df['Release Year'] <= year_range[1])
+                            ]
+
+                        # Calculate Match Accuracy
+                        def calculate_match_accuracy(row):
+                            score = 0
+                            if selected_genres:
+                                game_genres = row['Genres'].split(', ')
+                                genre_matches = len(set(game_genres) & set(selected_genres))
+                                score += genre_matches
+                            if min_score <= row['User Score'] <= max_score:
+                                score += 1
+                            if 'User Ratings Count' in row and row['User Ratings Count'] >= min_reviews:
+                                score += 1
+                            if 'Release Year' in row and year_range[0] <= row['Release Year'] <= year_range[1]:
+                                score += 1
+                            return min(score, 5)
+
+                        filtered_df['Match Accuracy'] = filtered_df.apply(calculate_match_accuracy, axis=1)
+
+                        # Add predicted user score
+                        filtered_df['Predicted User Score'] = (filtered_df['Match Accuracy'] / 5) * 10
+
+                        # Calculate Overall Average MAE
+                        overall_mae = np.mean(np.abs(filtered_df['User Score'] - filtered_df['Predicted User Score']))
+
+                        # Sort and select top 10
+                        recommended_games = filtered_df.sort_values(
+                            by=['Match Accuracy', 'User Score'], ascending=[False, False]
+                        ).head(10)
+
+                        if not recommended_games.empty:
+                            # Calculate Top 10 MAE
+                            mae = np.mean(np.abs(recommended_games['User Score'] - recommended_games['Predicted User Score']))
+
+                            st.subheader("🌟 Your Top 10 Recommended Games")
+
+                            # Display games
+                            for i in range(0, len(recommended_games), 2):
+                                cols = st.columns(2)
+                                for j in range(2):
+                                    if i + j < len(recommended_games):
+                                        game = recommended_games.iloc[i + j]
+                                        with cols[j]:
+                                            with st.container():
+                                                st.markdown(f"""
+                                                <div style='background-color: #333333; padding: 15px; border-radius: 10px; margin-bottom: 15px;'>
+                                                    <h4 style='color: #4CAF50;'>{game['Title']}</h4>
+                                                    <p><b>Genre:</b> {game['Genres']}</p>
+                                                    <p><b>User Score:</b> {game['User Score']:.1f}/10</p>
+                                                    <p><b>Match Accuracy:</b> {game['Match Accuracy']}/5</p>
+                                                    <p><b>Predicted User Score:</b> {game['Predicted User Score']:.1f}/10</p>
+                                                    {'<p><b>Platforms:</b> ' + game['Platforms'] + '</p>' if 'Platforms' in game else ''}
+                                                    {'<p><b>Release Date:</b> ' + str(game['Release Date']) + '</p>' if 'Release Date' in game else ''}
+                                                </div>
+                                                """, unsafe_allow_html=True)
+
+                            st.markdown("---")
+
+                            # Model Evaluation
+                            st.subheader("📊 Model Evaluation")
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.metric(label="Top 10 MAE", value=f"{mae:.2f}")
+                            with col2:
+                                st.metric(label="Overall Average MAE", value=f"{overall_mae:.2f}")
+
+                            st.markdown("---")
+
+                            # Download CSV Only
+                            st.subheader("📥 Download Your Recommendations")
+                            csv = recommended_games.to_csv(index=False)
                             st.download_button(
-                                label="Download Recommendations as CSV",
+                                label="Download as CSV",
                                 data=csv,
-                                file_name='recommended_games.csv',
-                                mime='text/csv'
+                                file_name='my_game_recommendations.csv',
+                                mime='text/csv',
+                                use_container_width=True
                             )
                         else:
-                            st.warning("No games match your preferences. Try adjusting the genre or score.")
+                            st.warning("""
+                            No matching games found! Try:
+                            - Adding more genres
+                            - Relaxing your filters
+                            - Widening score or year range
+                            """)
                     except Exception as e:
-                        st.error(f"An error occurred while processing recommendations: {e}")
+                        st.error(f"An error occurred: {str(e)}")
+                        st.exception(e)
         except Exception as e:
-            st.error(f"An error occurred while loading the file: {e}")
+            st.error(f"Failed to process your file: {str(e)}")
     else:
-        st.info("Please upload a CSV file to get started.")
+        st.info("""
+        ℹ️ Upload a CSV file containing game data to begin.
+        Need sample data? [Download sample](#) (coming soon!)
+        """)
 
 # Page 3: Game Correlation Finder
 elif page == "Game Correlation Finder":
